@@ -130,7 +130,8 @@ public class ImageHelperActivity extends AppCompatActivity {
                 Log.d("ML", "received callback from camera");
                 Bitmap bitmap = BitmapFactory.decodeFile(photoFile.getAbsolutePath());
                 inputImageView.setImageBitmap(bitmap);
-                runClassification(uri);
+                runClassification(Uri.fromFile(photoFile));
+
             }
         }
     }
