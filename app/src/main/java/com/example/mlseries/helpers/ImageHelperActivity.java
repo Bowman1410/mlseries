@@ -4,15 +4,18 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.FileProvider;
 
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.ImageDecoder;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.Manifest;
+import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
@@ -28,18 +31,24 @@ import com.google.mlkit.vision.label.ImageLabeler;
 import com.google.mlkit.vision.label.ImageLabeling;
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
 
+import java.io.File;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 public class ImageHelperActivity extends AppCompatActivity {
 
     private int REQUEST_PICK_IMAGE = 1000;
+    private int REQUEST_CAPUTRE_IMAGE = 1001;
 
     private ImageView inputImageView;
     private TextView outputTextView;
 
     // to use MLKit
     private ImageLabeler imageLabeler;
+
+    private File photoFile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,16 +89,46 @@ public class ImageHelperActivity extends AppCompatActivity {
 
     public void onStartCamera(View view) {
 
+        // create a file to share with Camera
+        photoFile = createPhotoFile();
+        //change name here and on manifest
+        Uri fileUri = FileProvider.getUriForFile(this, "com.iago.fileprovider", photoFile);
+        // create an intent
+        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, fileUri);
+        // startActivityForResult
+        startActivityForResult(intent, REQUEST_CAPUTRE_IMAGE);
+
+    }
+
+    private File createPhotoFile() {
+        File photoFileDir = new File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "ML_IMAGEHELPER");
+
+        if (!photoFileDir.exists()){
+            photoFileDir.mkdirs();
+        }
+
+        String name = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        File file = new File(photoFileDir.getPath() + File.separator + name);
+        return file;
+
+
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (resultCode == RESULT_OK){
-            if (requestCode == REQUEST_PICK_IMAGE){
-                Uri uri = data.getData();
+        if (resultCode == RESULT_OK) {
+            Uri uri = null;
+            if (requestCode == REQUEST_PICK_IMAGE) {
+                uri = data.getData();
                 Bitmap bitmap = loadFromUri(uri);
+                inputImageView.setImageBitmap(bitmap);
+                runClassification(uri);
+            } else if (requestCode == REQUEST_CAPUTRE_IMAGE) {
+                Log.d("ML", "received callback from camera");
+                Bitmap bitmap = BitmapFactory.decodeFile(photoFile.getAbsolutePath());
                 inputImageView.setImageBitmap(bitmap);
                 runClassification(uri);
             }
