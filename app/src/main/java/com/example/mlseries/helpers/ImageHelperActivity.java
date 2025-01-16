@@ -20,8 +20,16 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.example.mlseries.R;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.label.ImageLabel;
+import com.google.mlkit.vision.label.ImageLabeler;
+import com.google.mlkit.vision.label.ImageLabeling;
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions;
 
 import java.io.IOException;
+import java.util.List;
 
 public class ImageHelperActivity extends AppCompatActivity {
 
@@ -30,6 +38,9 @@ public class ImageHelperActivity extends AppCompatActivity {
     private ImageView inputImageView;
     private TextView outputTextView;
 
+    // to use MLKit
+    private ImageLabeler imageLabeler;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -37,6 +48,12 @@ public class ImageHelperActivity extends AppCompatActivity {
 
         inputImageView = findViewById(R.id.imageViewInput);
         outputTextView = findViewById(R.id.textViewOutput);
+
+        //Init image labeler config
+        imageLabeler = ImageLabeling.getClient(new ImageLabelerOptions.Builder()
+                                                .setConfidenceThreshold(0.7f)
+                                                .build()
+        );
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
@@ -74,6 +91,7 @@ public class ImageHelperActivity extends AppCompatActivity {
                 Uri uri = data.getData();
                 Bitmap bitmap = loadFromUri(uri);
                 inputImageView.setImageBitmap(bitmap);
+                runClassification(uri);
             }
         }
     }
@@ -83,8 +101,13 @@ public class ImageHelperActivity extends AppCompatActivity {
 
         try {
             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.N_MR1){
-                ImageDecoder.Source source = ImageDecoder.createSource(getContentResolver(), uri);
-                bitmap = ImageDecoder.decodeBitmap(source);
+                ImageDecoder.Source source = null;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    source = ImageDecoder.createSource(getContentResolver(), uri);
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    bitmap = ImageDecoder.decodeBitmap(source);
+                }
 
             } else {
                 bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), uri);
@@ -95,5 +118,39 @@ public class ImageHelperActivity extends AppCompatActivity {
 
 
         return bitmap;
+    }
+    // model init & config
+    private void runClassification(Uri uri) {
+        InputImage inputImage = null;
+        try {
+            inputImage = InputImage.fromFilePath(this, uri);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
+        imageLabeler.process(inputImage).addOnSuccessListener(new OnSuccessListener<List<ImageLabel>>() {
+            @Override
+            public void onSuccess(List<ImageLabel> imageLabels) {
+                if (imageLabels.size()>0){
+                    StringBuilder builder = new StringBuilder();
+                    for (ImageLabel label : imageLabels) {
+                        builder.append(label.getText())
+                                .append(" : ")
+                                .append(label.getConfidence())
+                                .append("\n");
+                    }
+                    outputTextView.setText(builder.toString());
+
+                }else{
+                    outputTextView.setText("Could not Classify");
+                }
+            }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                e.printStackTrace();
+            }
+        });
+
     }
 }
